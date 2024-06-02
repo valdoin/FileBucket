@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+    <title>FileBucket 🪣</title>
+</head>
+
+<body>
+    <h1>Utilisez ce bouton pour uploader toutes vos photos/vidéos !</h1>
+    <form id="uploadForm" method="POST" enctype="multipart/form-data">
+        <input id="fileInput" type="file" name="file" multiple style="display: none;">
+        <button type="button" onclick="document.getElementById('fileInput').click()" class="custom-file-upload">Ajouter</button>
+    </form>
+    
+    <div id="progressContainer" class = "progress-container" style="display: none;">
+        <progress id="progressBar" class="progress-bar" value="0" max="100"></progress>
+    </div>
+
+    <h2>Vos fichiers :</h2>
+    <button onclick="downloadAllFiles()" class="custom-file-upload">Télécharger tous les fichiers</button>
+    <div id="imageContainer">
+        {% for file in files[:15] %}
+        {% if file.endswith('.mp4') or file.endswith('.avi') or file.endswith('.mov') or file.endswith('.wmv') or file.endswith('.mkv') %}
+        <video controls class="video-preview">
+            <source src="{{ url_for('static', filename='uploads/' + file) }}" type="video/{{ file.split('.')[-1] }}">
+        </video>
+        {% else %}
+        <img src="{{ url_for('static', filename='uploads/' + file) }}" alt="{{ file }}" class="image-preview" onclick="previewImage('{{ url_for('static', filename='uploads/' + file) }}')">
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <button id="loadMoreButton" onclick="loadMoreImages()" class="custom-file-upload">Charger plus</button>
+
+    <div id="galleryContainer" class="gallery-container">
+        <img id="galleryImage" class="gallery-image">
+    </div>
+
+    <script>
+        var currentIndex = 15;
+        var files = {{ files | tojson }};
+
+        document.getElementById('fileInput').addEventListener('change', function() {
+            var form = document.getElementById('uploadForm');
+            var formData = new FormData(form);
+            var xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', function(e) {
+                var progressContainer = document.getElementById('progressContainer');
+                var progressBar = document.getElementById('progressBar');
+                progressContainer.style.display = 'block';
+
+                if (e.lengthComputable) {
+                    var percentComplete = (e.loaded / e.total) * 100;
+                    progressBar.value = percentComplete;
+                }
+            });
+
+            xhr.addEventListener('load', function() {
+                document.getElementById('progressContainer').style.display = 'none';
+                location.reload();
+            });
+
+            xhr.open('POST', '/');
+            xhr.send(formData);
+        });
+
+        function previewImage(imageUrl, index) {
+            var galleryContainer = document.getElementById('galleryContainer');
+            var galleryImage = document.getElementById('galleryImage');
+            galleryImage.src = imageUrl;
+            currentIndex = index;
+            galleryContainer.style.display = 'block';
+        }
+
+        function loadMoreImages() {
+            var imageContainer = document.getElementById('imageContainer');
+            var endIndex = Math.min(currentIndex + 15, files.length);
+            for (var i = currentIndex; i < endIndex; i++) {
+                var file = files[i];
+                var imageElement;
+                if (file.endsWith('.mp4') || file.endsWith('.avi') || file.endsWith('.mov') || file.endsWith('.wmv') || file.endsWith('.mkv')) {
+                    imageElement = document.createElement('video');
+                    imageElement.controls = true;
+                    var sourceElement = document.createElement('source');
+                    sourceElement.src = "{{ url_for('static', filename='uploads/') }}" + file;
+                    sourceElement.type = "video/" + file.split('.').pop();
+                    imageElement.appendChild(sourceElement);
+                } else {
+                    imageElement = document.createElement('img');
+                    imageElement.src = "{{ url_for('static', filename='uploads/') }}" + file;
+                    imageElement.alt = file;
+                    imageElement.classList.add('image-preview');
+                    imageElement.addEventListener('click', function() {
+                        previewImage(this.src, currentIndex);
+                    });
+                }
+                imageContainer.appendChild(imageElement);
+            }
+            currentIndex = endIndex;
+            if (endIndex >= files.length) {
+                document.getElementById('loadMoreButton').style.display = 'none';
+            }
+        }
+
+        function downloadAllFiles() {
+            fetch('/download-all')
+                .then(response => response.blob())
+                .then(blob => {
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'all_files.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => console.error('Erreur:', error));
+        }
+
+        document.getElementById('galleryContainer').addEventListener('click', function(event) {
+            if (event.target === this) {
+                this.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+
+</html>
